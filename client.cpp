@@ -31,6 +31,7 @@ int main ()
     
     std::cout << "Connecting to hello world server..." << std::endl;
     socket.connect ("tcp://localhost:5555");
+    //socket.connect ("tcp://176.9.101.85:5555");
 
     //  Initialize random number generator
     //srandom ((unsigned) time (NULL));
@@ -44,7 +45,7 @@ int main ()
     
     
     int start = within(1000);
-    int count = 1000;
+    int count = 10;
     
     //  Do 10 requests, waiting each time for a response
     for (int request_nbr = start; request_nbr != start+count; request_nbr++) {
@@ -58,7 +59,7 @@ int main ()
 		//iss << "SET key" << request_nbr << " val" << request_nbr;
 		
 		snprintf ((char *) request.data(), 200 ,
-            "for(i=%d; i<%d+10; i++){ put('db','aaa%d','dane%d') }", request_nbr, request_nbr, request_nbr, request_nbr);
+            "for(i=%d; i<%d+10; i++){ put('db/test%d','aaa%d','dane%d') }", request_nbr, request_nbr, request_nbr, request_nbr, request_nbr);
 		
         //std::cout << "Sending: " << static_cast<char*>(request.data()) << "..." << std::endl;
         socket.send (request);
@@ -66,7 +67,7 @@ int main ()
         //  Get the reply
         zmq::message_t reply;
         socket.recv (&reply);
-        //std::cout << "Received: " << static_cast<char*>(reply.data()) << std::endl;
+        std::cout << "Received: " << static_cast<char*>(reply.data()) << std::endl;
         resp_time = get_time_us() - resp_time;
         resp_time_med += resp_time;
         resp_time_min = resp_time_min > resp_time ? resp_time : resp_time_min;
@@ -83,7 +84,7 @@ int main ()
 		//iss << "SET key" << request_nbr << " val" << request_nbr;
 		
 		snprintf ((char *) request.data(), 200 ,
-            "for(i=%d; i<%d+10; i++){ get('db','aaa%d') }", request_nbr, request_nbr, request_nbr);
+            "for(i=%d; i<%d+10; i++){ get('db/test%d','aaa%d') }", request_nbr, request_nbr, request_nbr, request_nbr);
 				
         //std::cout << "Sending: " << static_cast<char*>(request.data()) << "..." << std::endl;
         socket.send (request);
@@ -91,7 +92,7 @@ int main ()
         //  Get the reply
         zmq::message_t reply;
         socket.recv (&reply);
-        //std::cout << "Received: " << static_cast<char*>(reply.data()) << std::endl;
+        std::cout << "Received: " << static_cast<char*>(reply.data()) << std::endl;
     }
 
     total_msec = (get_time_us() - total_msec)/1000;
