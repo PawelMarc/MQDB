@@ -1,7 +1,9 @@
+#MQDB
+
 This is very early alpha release DO NOT USE THIS!!!!
 
-What it does?
-==============
+##What it does?
+
 This is database server based on: 
 - 0MQ for communication
 - JavaScript V8 for scripting
@@ -10,8 +12,8 @@ This is database server based on:
 you simply send JS source code of commands to this server and it does all the magic
 
 
-Install
-==============
+##Install
+
 To install you need to install 0MQ first
 
 After this run make in leveldb dir
