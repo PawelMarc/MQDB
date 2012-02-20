@@ -4,6 +4,7 @@ ARCH := $(shell getconf LONG_BIT)
 
 COREMQ= mqdb.o
 OBJ=
+HMQ = include/lru_cache/lru_cache.h include/lru_cache/scoped_mutex.h
 
 CORECL= client.o
 OBJ=
@@ -27,7 +28,7 @@ all: mqdb client
 %.o: %.cpp Makefile
 	g++ $(CFLAGS) -c -I./include -I$(V8DIR)/include -g -o $*.o $*.cpp
 
-mqdb:	$(V8) $(COREMQ) $(OBJ) Makefile
+mqdb:	$(V8) $(COREMQ) $(OBJ) $(HMQ) Makefile
 	g++ $(CFLAGS) -o mqdb $(COREMQ) $(OBJ) -L$(V8LIB_DIR)/ -L./leveldb/ -lv8_base -lv8_snapshot -lmm -lgd -lpthread -lzmq -lleveldb
 
 client:	$(V8) $(CORECL) $(OBJ) Makefile
