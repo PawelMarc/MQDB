@@ -17,18 +17,8 @@
 #include <zmq.hpp>
 #include <unistd.h>
 #include "leveldb/db.h"
+#include "lru_cache/lru_cache.h"
 
-struct dbcontext {
-    void *context;
-    leveldb::DB* db;
-};
-
-//global context
-//TODO: change to map
-struct dbcontext *gcontext;
-
-using namespace std;
-using namespace v8;
 
 #define NUM_THREADS     5
 
@@ -38,6 +28,52 @@ using namespace v8;
 #define JSARRAY Handle<Array>
 #define JSARGS const Arguments&
 
+using namespace std;
+using namespace v8;
+
+/// LRUCache for keeping open databases
+typedef LRUCache<std::string, leveldb::DB*> db_lru_type;
+
+struct dbcontext {
+    void *context;
+    db_lru_type* dbl;
+};
+
+//global context
+struct dbcontext *gcontext;
+
+
+//helper db functions
+
+//opens or creates db for given name
+leveldb::DB* getDb(db_lru_type* dbl, const String::Utf8Value &name) {
+    leveldb::DB* ret = 0;
+    //first check global lru cache
+    if (dbl->exists(*name)) {
+        //cout << "getDB exists for: " << *name << endl;
+        ret = dbl->fetch(*name); //->db;
+    }
+    else {
+        //cout << "getDB create for: " << *name << endl;
+        leveldb::Options options;
+        options.create_if_missing = true;
+        leveldb::Status s = leveldb::DB::Open(options, *name, &ret);    
+        if (s.ok()) {
+            dbl->insert(*name, ret);
+        } else {
+            //TODO: error handling!
+            std::cerr << s.ToString() << std::endl;
+        }
+    }
+    return ret;
+}
+
+void closeDb(leveldb::DB* db) {
+    cout << "closeDb for: " << db << endl;
+    delete db;
+}
+
+
 static JSVAL addnum(JSARGS args) {
     HandleScope scope;
     int x = args[0]->IntegerValue();
@@ -45,17 +81,16 @@ static JSVAL addnum(JSARGS args) {
     return scope.Close(Integer::New(x+y));
 }
 
-
-leveldb::DB* getDb(String::Utf8Value &name) {
-    return gcontext->db;
-}
-
 static JSVAL put(JSARGS args) {
     HandleScope scope;
     String::Utf8Value dbname(args[0]->ToString());
     String::Utf8Value key(args[1]->ToString());
     String::Utf8Value val(args[1]->ToString());
-    leveldb::DB* db = getDb(dbname);
+    leveldb::DB* db = getDb(gcontext->dbl, dbname);
+    if (!db) {
+        //TODO: error handling
+        return scope.Close(Integer::New(0));
+    }
     leveldb::Status s;
     s = db->Put(leveldb::WriteOptions(), *key, *val);
     if (!s.ok()) return scope.Close(Integer::New(0)); //std::cerr << "ERROR: " << s.ToString() << std::endl;
@@ -67,7 +102,11 @@ static JSVAL get(JSARGS args) {
     String::Utf8Value dbname(args[0]->ToString());
     String::Utf8Value key(args[1]->ToString());
     std::string val;
-    leveldb::DB* db = getDb(dbname);
+    leveldb::DB* db = getDb(gcontext->dbl, dbname);
+    if (!db) {
+        //TODO: error handling
+        return scope.Close(Integer::New(0));
+    }
     leveldb::Status s;
     s = db->Get(leveldb::ReadOptions(), *key, &val);
     if (!s.ok()) return scope.Close(Integer::New(0)); //std::cerr << "ERROR: " << s.ToString() << std::endl;
@@ -201,6 +240,9 @@ int main() {
     gcontext = &dbc;
     
     dbc.context = zmq_init (1);
+    //max open 100 databases
+    dbc.dbl = new db_lru_type(3);
+    dbc.dbl->setOnRemove(&closeDb);
 
     //  Socket to talk to clients
     void *clients = zmq_socket (dbc.context, ZMQ_ROUTER);
@@ -212,10 +254,10 @@ int main() {
    
     // creating DB
     //leveldb::DB* db;
-    leveldb::Options options;
-    options.create_if_missing = true;
-    leveldb::Status s = leveldb::DB::Open(options, "/tmp/testdb", &dbc.db);    
-    if (!s.ok()) std::cerr << s.ToString() << std::endl;
+    //leveldb::Options options;
+    //options.create_if_missing = true;
+    //leveldb::Status s = leveldb::DB::Open(options, "/tmp/testdb", &dbc.db);    
+    //if (!s.ok()) std::cerr << s.ToString() << std::endl;
 
     //  Launch pool of worker threads
     int thread_nbr;
