@@ -48,7 +48,7 @@ Example using C:
         std::cout << "Received: " << static_cast<char*>(reply.data()) << std::endl;
         
 As you can see we are simply sending JavaScript code to server using 0MQ message.
-Server returnes whatever our script returns or information about error.
+Server returns whatever our script returns or information about error.
 
 ##DB API
 
@@ -62,12 +62,12 @@ I will try to keep API very minimal (will add cursors, remove etc)
 
 ##Extending
 
-MQDB can be very easly extended using JavaScript on server side
+MQDB can be very easily extended using JavaScript on server side
 
 ##Performance
 
-It is difficult to compare with other systems, because you can make alot of get/put on the server using one script.
-On my laptop (4 cores, 8GB RAM) it runs client and server simultaniously with speed about 1000 scripts / second.
+It is difficult to compare with other systems, because you can make a lot of get/put on the server using one script.
+On my laptop (4 cores, 8GB RAM) it runs client and server simultaneously with speed about 1000 scripts / second.
 
        
 
