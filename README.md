@@ -1,4 +1,4 @@
-###MQDB
+#MQDB
 
 This is very early alpha release DO NOT USE THIS!!!!
 
@@ -61,7 +61,7 @@ In case of some error exception will be raised. If you want to create database "
 
 * del(db_name, key) -- returns 1 if success, throws exception in case of error
 
-#Iterator API
+###Iterator API
 
 * it_new(db_name) -- returns handle to it object for use in other functions, you do not need to dealocate the objects, it is automaticaly removed after script is executed
 
