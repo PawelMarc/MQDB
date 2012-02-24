@@ -65,15 +65,21 @@ In case of some error exception will be raised. If you want to create database "
 
 * it_new(db_name) -- returns handle to it object for use in other functions, you do not need to dealocate the objects, it is automaticaly removed after script is executed
 
-* it_first(it) -- seeks to first element returns 0 if failed, 1 if success
+* it_first(it) -- seeks to first element returns 1 if success, throws exception in case of error
 
-* it_next(it) -- moves to next element returns 0 if failed, 1 if success
+* it_last(it) -- seeks to last element returns 1 if success, throws exception in case of error
+
+* it_seek(it, val) -- seeks to element equall or greater then val returns 1 if success, throws exception in case of error
+
+* it_next(it) -- moves to next element returns 1 if success, throws exception in case of error
+
+* it_prev(it) -- moves to prev element returns 1 if success, throws exception in case of error
 
 * it_valid(it) -- returns 0 if iterator is no longer valid
 
-* it_val(it) -- returns current value as string
+* it_val(it) -- returns current value as string or throws exception
 
-* it_key(it) -- returns current key as string
+* it_key(it) -- returns current key as string or throws exception
 
 * it_del(it) -- if you like you can remove iterator by hand (do not need to)
 
@@ -87,7 +93,17 @@ This code returns all values in database and removes them all while reading
             del('db/testb', it_key(it)) 
         }; 
         JSON.stringify(ret)
-        
+
+This code returns all values with keys between "aaa2" and "aaa4"
+
+        var ret = []; 
+        var i = 0; 
+        var it = it_new('db/testb'); 
+        for(it_seek(it, 'aaa2'); it_valid(it) && it_key(it)<'aaa4'; it_next(it)){ 
+            ret[i++] = {'key': it_key(it), 'val': it_val(it)}; 
+        }; 
+        JSON.stringify(ret)
+                
 ##Extending
 
 MQDB can be very easily extended using JavaScript on server side

@@ -237,6 +237,27 @@ static JSVAL it_first(JSARGS args) {
     return scope.Close(Integer::New(1));
 }
 
+static JSVAL it_last(JSARGS args) {
+    HandleScope scope;
+    leveldb::Iterator* it = (leveldb::Iterator*) External::Unwrap(args[0]);
+    if (!it) {
+        return v8::ThrowException(v8::String::New("Iterator is Null"));
+    }
+    it->SeekToLast();
+    return scope.Close(Integer::New(1));
+}
+
+static JSVAL it_seek(JSARGS args) {
+    HandleScope scope;
+    leveldb::Iterator* it = (leveldb::Iterator*) External::Unwrap(args[0]);
+    String::Utf8Value val(args[1]->ToString());
+    if (!it) {
+        return v8::ThrowException(v8::String::New("Iterator is Null"));
+    }
+    it->Seek(*val);
+    return scope.Close(Integer::New(1));
+}
+
 static JSVAL it_next(JSARGS args) {
     HandleScope scope;
     leveldb::Iterator* it = (leveldb::Iterator*) External::Unwrap(args[0]);
@@ -245,6 +266,17 @@ static JSVAL it_next(JSARGS args) {
         return v8::ThrowException(v8::String::New("Iterator is Null"));
     }
     it->Next();
+    return scope.Close(Integer::New(1));
+}
+
+static JSVAL it_prev(JSARGS args) {
+    HandleScope scope;
+    leveldb::Iterator* it = (leveldb::Iterator*) External::Unwrap(args[0]);
+    //leveldb::Iterator* it = (leveldb::Iterator*) args[0]->IntegerValue();
+    if (!it) {
+        return v8::ThrowException(v8::String::New("Iterator is Null"));
+    }
+    it->Prev();
     return scope.Close(Integer::New(1));
 }
 
@@ -369,7 +401,10 @@ void* worker_routine(void *vdbc) {
     globals->Set(String::New("it_del"), FunctionTemplate::New(it_del));
     globals->Set(String::New("it_new"), FunctionTemplate::New(it_new));
     globals->Set(String::New("it_first"), FunctionTemplate::New(it_first));
+    globals->Set(String::New("it_last"), FunctionTemplate::New(it_last));
+    globals->Set(String::New("it_seek"), FunctionTemplate::New(it_seek));
     globals->Set(String::New("it_next"), FunctionTemplate::New(it_next));
+    globals->Set(String::New("it_prev"), FunctionTemplate::New(it_prev));
     globals->Set(String::New("it_valid"), FunctionTemplate::New(it_valid));
     globals->Set(String::New("it_key"), FunctionTemplate::New(it_key));
     globals->Set(String::New("it_val"), FunctionTemplate::New(it_val));

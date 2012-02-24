@@ -84,7 +84,10 @@ int main ()
 		//iss << "SET key" << request_nbr << " val" << request_nbr;
 		
 		snprintf ((char *) request.data(), 2000,
-		"var ret = []; var i = 0; var it = it_new('db/testb'); for(it_first(it); it_valid(it); it_next(it)){ ret[i++] = {'key': it_key(it), 'val': it_val(it)}; del('db/testb', it_key(it)) }; JSON.stringify(ret)"); 
+		"var ret = []; var i = 0; var it = it_new('db/testb'); for(it_seek(it, 'aaa2'); it_valid(it) && it_key(it)<'aaa4'; it_next(it)){ ret[i++] = {'key': it_key(it), 'val': it_val(it)}; }; JSON.stringify(ret)"
+		//"var ret = []; var i = 0; var it = it_new('db/testb'); for(it_first(it); it_valid(it); it_next(it)){ ret[i++] = {'key': it_key(it), 'val': it_val(it)}; };"
+		//"for(it_last(it); it_valid(it); it_prev(it)){ ret[i++] = {'key': it_key(it), 'val': it_val(it)}; del('db/testb', it_key(it)) }; JSON.stringify(ret)" 
+		); 
 		// var off = %d; for(i=0; i<10; i++){ var key = 'aaa'+(i+off); ret[i] = {'key': key, 'get': get('db/test', key)}; del('db/test', key) }; JSON.stringify(ret)", request_nbr);
 		 //"var ret = []; var off = %d; for(i=0; i<10; i++){ var key = 'aaa'+(i+off); ret[i] = {'key': key, 'get': get('db/test', key)}; del('db/test', key) }; JSON.stringify(ret)", request_nbr);
 				
