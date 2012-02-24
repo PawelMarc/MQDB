@@ -56,10 +56,37 @@ For now we have only two commands
 
 * put(db_name, key, val) -- returns 0 if failed, 1 if success
 
-* get(db_name, key) -- returns value, or 0 if failed
+* get(db_name, key) -- returns value, or Null if failed
 
-I will try to keep API very minimal (will add cursors, remove etc)
+* del(db_name, key) -- returns 0 if failed, 1 if success
 
+#Iterator API
+
+* it_new(db_name) -- returns handle to it object for use in other functions, you do not need to dealocate the objects, it is automaticaly removed after script is executed
+
+* it_first(it) -- seeks to first element returns 0 if failed, 1 if success
+
+* it_next(it) -- moves to next element returns 0 if failed, 1 if success
+
+* it_valid(it) -- returns 0 if iterator is no longer valid
+
+* it_val(it) -- returns current value as string
+
+* it_key(it) -- returns current key as string
+
+* it_del(it) -- if you like you can remove iterator by hand (do not need to)
+
+This code returns all values in database and removes them all while reading
+
+        var ret = []; 
+        var i = 0; 
+        var it = it_new('db/testb'); 
+        for(it_first(it); it_valid(it); it_next(it)){ 
+            ret[i++] = {'key': it_key(it), 'val': it_val(it)}; 
+            del('db/testb', it_key(it)) 
+        }; 
+        JSON.stringify(ret)
+        
 ##Extending
 
 MQDB can be very easily extended using JavaScript on server side

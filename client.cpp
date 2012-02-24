@@ -53,13 +53,13 @@ int main ()
         unsigned long resp_time = get_time_us();
         
         //FIX: 100 is max length
-        zmq::message_t request (200);
+        zmq::message_t request (2000);
         
         //std::istringstream iss(static_cast<char*>(request.data()));
 		//iss << "SET key" << request_nbr << " val" << request_nbr;
 		
-		snprintf ((char *) request.data(), 200 ,
-            "for(i=%d; i<%d+10; i++){ put('db/test%d','aaa%d','dane%d') }", request_nbr, request_nbr, request_nbr, request_nbr, request_nbr);
+		snprintf ((char *) request.data(), 2000 ,
+            "for(i=%d; i<%d+10; i++){ put('db/testb','aaa'+i,'dane'+i) }", request_nbr, request_nbr);
 		
         //std::cout << "Sending: " << static_cast<char*>(request.data()) << "..." << std::endl;
         socket.send (request);
@@ -77,14 +77,16 @@ int main ()
 
     for (int request_nbr = start; request_nbr != start+count; request_nbr++) {
         //FIX: 100 is max length
-        zmq::message_t request (100);
+        zmq::message_t request (2000);
         //memcpy ((void *) request.data (), "Hello", 5);
         
         //std::istringstream iss(static_cast<char*>(request.data()));
 		//iss << "SET key" << request_nbr << " val" << request_nbr;
 		
-		snprintf ((char *) request.data(), 200 ,
-            "for(i=%d; i<%d+10; i++){ get('db/test%d','aaa%d') }", request_nbr, request_nbr, request_nbr, request_nbr);
+		snprintf ((char *) request.data(), 2000,
+		"var ret = []; var i = 0; var it = it_new('db/testb'); for(it_first(it); it_valid(it); it_next(it)){ ret[i++] = {'key': it_key(it), 'val': it_val(it)}; del('db/testb', it_key(it)) }; JSON.stringify(ret)"); 
+		// var off = %d; for(i=0; i<10; i++){ var key = 'aaa'+(i+off); ret[i] = {'key': key, 'get': get('db/test', key)}; del('db/test', key) }; JSON.stringify(ret)", request_nbr);
+		 //"var ret = []; var off = %d; for(i=0; i<10; i++){ var key = 'aaa'+(i+off); ret[i] = {'key': key, 'get': get('db/test', key)}; del('db/test', key) }; JSON.stringify(ret)", request_nbr);
 				
         //std::cout << "Sending: " << static_cast<char*>(request.data()) << "..." << std::endl;
         socket.send (request);
