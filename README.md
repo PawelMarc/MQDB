@@ -52,13 +52,14 @@ Server returns whatever our script returns or information about error.
 
 ##DB API
 
-For now we have only two commands
+All functions take name of the database as first argument. It is path to catalog when leveldb will put data. If database does not exist it will be created.
+In case of some error exception will be raised. If you want to create database "/a/b/s/some_db" the path "/a/b/s/" must exist. 
 
-* put(db_name, key, val) -- returns 0 if failed, 1 if success
+* put(db_name, key, val) -- returns 1 if success, throws exception in case of error
 
-* get(db_name, key) -- returns value, or Null if failed
+* get(db_name, key) -- returns value, or Null if key does not exist, in case of other errors throws exception
 
-* del(db_name, key) -- returns 0 if failed, 1 if success
+* del(db_name, key) -- returns 1 if success, throws exception in case of error
 
 #Iterator API
 
