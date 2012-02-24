@@ -63,13 +63,13 @@ In case of some error exception will be raised. If you want to create database "
 
 ###Iterator API
 
-* it_new(db_name) -- returns handle to it object for use in other functions, you do not need to dealocate the objects, it is automaticaly removed after script is executed
+* it_new(db_name) -- returns handle to iterator object for use in other functions, you do not need to deallocate the objects, they are automatically removed after script is executed
 
 * it_first(it) -- seeks to first element returns 1 if success, throws exception in case of error
 
 * it_last(it) -- seeks to last element returns 1 if success, throws exception in case of error
 
-* it_seek(it, val) -- seeks to element equall or greater then val returns 1 if success, throws exception in case of error
+* it_seek(it, val) -- seeks to element equal or greater then val returns 1 if success, throws exception in case of error
 
 * it_next(it) -- moves to next element returns 1 if success, throws exception in case of error
 
