@@ -17,8 +17,10 @@
 #include <zmq.hpp>
 #include <unistd.h>
 #include "leveldb/db.h"
+#include "leveldb/cache.h"
 #include "lru_cache/lru_cache.h"
-
+#include "EWAHBoolArray/headers/ewah.h"
+#include "fstools.cc"
 
 #define NUM_THREADS     5
 
@@ -37,6 +39,7 @@ typedef LRUCache<std::string, leveldb::DB*> db_lru_type;
 struct dbcontext {
     void *context;
     db_lru_type* dbl;
+    char* init_code;
 };
 
 //global context
@@ -56,16 +59,16 @@ leveldb::DB* getDb(db_lru_type* dbl, const String::Utf8Value &name, leveldb::Sta
     else {
         //cout << "getDB create for: " << *name << endl;
         leveldb::Options options;
+        //TODO: setting cache size by user, default is 8MB
+        //options.block_cache = leveldb::NewLRUCache(100 * 1048576);  // 100MB cache
         options.create_if_missing = true;
         s = leveldb::DB::Open(options, *name, &ret);    
         if (s.ok()) {
             dbl->insert(*name, ret);
         } else {
-            //TODO: error handling!
+            //we return s with error set and caller of this function will handle error
+            //TODO: change to log
             std::cerr << s.ToString() << std::endl;
-            //v8::ThrowException(v8::String::New(s.ToString().c_str()));
-            //return NULL;
-            //std::cerr << s.ToString() << std::endl;
         }
     }
     return ret;
@@ -142,11 +145,18 @@ static JSVAL addnum(JSARGS args) {
     return scope.Close(Integer::New(x+y));
 }
 
+static JSVAL print(JSARGS args) {
+    HandleScope scope;
+    String::Utf8Value s(args[0]->ToString());
+    cout << *s << endl;
+    return scope.Close(Null());
+}
+
 static JSVAL put(JSARGS args) {
     HandleScope scope;
     String::Utf8Value dbname(args[0]->ToString());
     String::Utf8Value key(args[1]->ToString());
-    String::Utf8Value val(args[1]->ToString());
+    String::Utf8Value val(args[2]->ToString());
     leveldb::Status s;
     leveldb::DB* db = getDb(gcontext->dbl, dbname, s);
     if (!db) {
@@ -323,6 +333,373 @@ static JSVAL it_del(JSARGS args) {
     return scope.Close(Integer::New(1));
 }
 
+//*******************
+//EWAH BITSET
+
+#define LENGTH uword64
+
+void auto_del_bs(void *val) {
+    //cout << "Auto deleting Iterator" << endl;
+    EWAHBoolArray<LENGTH>* bs = static_cast< EWAHBoolArray<LENGTH>* >(val);
+    delete bs;
+}
+
+void auto_del_bs_it(void *val) {
+    //cout << "Auto deleting Iterator" << endl;
+    EWAHBoolArray<LENGTH>::const_iterator* it = static_cast< EWAHBoolArray<LENGTH>::const_iterator* >(val);
+    delete it;
+}
+
+static JSVAL bs_new(JSARGS args) {
+    HandleScope scope;
+    EWAHBoolArray<LENGTH>* bs = new EWAHBoolArray<LENGTH>();
+    
+    //add ewah for auto del
+    add_obj((void*)bs, auto_del_bs);
+    
+    return scope.Close(External::Wrap(bs));
+}
+
+
+//bitset1.reset();
+static JSVAL bs_reset(JSARGS args) {
+    HandleScope scope;
+    EWAHBoolArray<LENGTH>* bs = (EWAHBoolArray<LENGTH>*) External::Unwrap(args[0]);
+    
+    if (!bs) {
+        return v8::ThrowException(v8::String::New("In reset bitset is Null"));
+    }
+    bs->reset();
+    return scope.Close(Null());
+}
+
+/**
+ * From EWAH code:
+ * set the ith bit to true (starting at zero).
+ * Auto-expands the bitmap. It has constant running time complexity.
+ * Note that you must set the bits in increasing order:
+ * set(1), set(2) is ok; set(2), set(1) is not ok.
+ */
+//bitset1.set(1);
+static JSVAL bs_set(JSARGS args) {
+    HandleScope scope;
+    EWAHBoolArray<LENGTH>* bs = (EWAHBoolArray<LENGTH>*) External::Unwrap(args[0]);
+    if (!bs) {
+        return v8::ThrowException(v8::String::New("In set bitset is Null"));
+    }
+    int v = args[1]->IntegerValue();
+    
+    bs->set(v);
+    return scope.Close(Null());
+}
+
+//bitset1.makeSameSize(bitset2);
+static JSVAL bs_makeSameSize(JSARGS args) {
+    HandleScope scope;
+    EWAHBoolArray<LENGTH>* bs = (EWAHBoolArray<LENGTH>*) External::Unwrap(args[0]);
+    if (!bs) {
+        return v8::ThrowException(v8::String::New("In makeSameSize bitset 1 is Null"));
+    }
+    EWAHBoolArray<LENGTH>* bs2 = (EWAHBoolArray<LENGTH>*) External::Unwrap(args[1]);
+    if (!bs2) {
+        return v8::ThrowException(v8::String::New("In makeSameSize bitset 2 is Null"));
+    }
+    
+    bs->makeSameSize(*bs2);
+    
+    return scope.Close(Null());
+}
+
+
+//bitset2.logicalnot(notbitset);
+static JSVAL bs_logicalnot(JSARGS args) {
+    HandleScope scope;
+    EWAHBoolArray<LENGTH>* bs = (EWAHBoolArray<LENGTH>*) External::Unwrap(args[0]);
+    if (!bs) {
+        return v8::ThrowException(v8::String::New("In logicalnot bitset 1 is Null"));
+    }
+    EWAHBoolArray<LENGTH>* bs2 = (EWAHBoolArray<LENGTH>*) External::Unwrap(args[1]);
+    if (!bs2) {
+        return v8::ThrowException(v8::String::New("In logicalnot bitset 2 is Null"));
+    }
+    
+    bs->logicalnot(*bs2);
+    
+    return scope.Close(Null());
+}
+
+
+//bitset2.inplace_logicalnot();
+static JSVAL bs_inplace_logicalnot(JSARGS args) {
+    HandleScope scope;
+    EWAHBoolArray<LENGTH>* bs = (EWAHBoolArray<LENGTH>*) External::Unwrap(args[0]);
+    if (!bs) {
+        return v8::ThrowException(v8::String::New("In inplace_logicalnot bitset is Null"));
+    }
+        
+    bs->inplace_logicalnot();
+    
+    return scope.Close(Null());
+}
+        
+//bitset1.logicalor(bitset2,orbitset);
+static JSVAL bs_logicalor(JSARGS args) {
+    HandleScope scope;
+    EWAHBoolArray<LENGTH>* bs = (EWAHBoolArray<LENGTH>*) External::Unwrap(args[0]);
+    if (!bs) {
+        return v8::ThrowException(v8::String::New("In logicalor bitset 1 is Null"));
+    }
+    EWAHBoolArray<LENGTH>* bs2 = (EWAHBoolArray<LENGTH>*) External::Unwrap(args[1]);
+    if (!bs2) {
+        return v8::ThrowException(v8::String::New("In logicalor bitset 2 is Null"));
+    }
+    EWAHBoolArray<LENGTH>* bs3 = (EWAHBoolArray<LENGTH>*) External::Unwrap(args[2]);
+    if (!bs3) {
+        return v8::ThrowException(v8::String::New("In logicalor bitset 3 is Null"));
+    }
+    
+    try {
+        bs->logicalor(*bs2, *bs3);
+    } catch(std::out_of_range e) {
+        return v8::ThrowException(v8::String::New("In logicalor std::out_of_range"));
+    }
+    
+    return scope.Close(Null());
+}
+
+
+//bitset1.sparselogicaland(notbitset,andbitset);
+static JSVAL bs_sparselogicaland(JSARGS args) {
+    HandleScope scope;
+    EWAHBoolArray<LENGTH>* bs = (EWAHBoolArray<LENGTH>*) External::Unwrap(args[0]);
+    if (!bs) {
+        return v8::ThrowException(v8::String::New("In sparselogicaland bitset 1 is Null"));
+    }
+    EWAHBoolArray<LENGTH>* bs2 = (EWAHBoolArray<LENGTH>*) External::Unwrap(args[1]);
+    if (!bs2) {
+        return v8::ThrowException(v8::String::New("In sparselogicaland bitset 2 is Null"));
+    }
+    EWAHBoolArray<LENGTH>* bs3 = (EWAHBoolArray<LENGTH>*) External::Unwrap(args[2]);
+    if (!bs3) {
+        return v8::ThrowException(v8::String::New("In sparselogicaland bitset 3 is Null"));
+    }
+    
+    bs->sparselogicaland(*bs2, *bs3);
+    
+    return scope.Close(Null());
+}
+
+
+//bitset1.logicaland(bitset2,andbitset);
+static JSVAL bs_logicaland(JSARGS args) {
+    HandleScope scope;
+    EWAHBoolArray<LENGTH>* bs = (EWAHBoolArray<LENGTH>*) External::Unwrap(args[0]);
+    if (!bs) {
+        return v8::ThrowException(v8::String::New("In logicaland bitset 1 is Null"));
+    }
+    EWAHBoolArray<LENGTH>* bs2 = (EWAHBoolArray<LENGTH>*) External::Unwrap(args[1]);
+    if (!bs2) {
+        return v8::ThrowException(v8::String::New("In logicaland bitset 2 is Null"));
+    }
+    EWAHBoolArray<LENGTH>* bs3 = (EWAHBoolArray<LENGTH>*) External::Unwrap(args[2]);
+    if (!bs3) {
+        return v8::ThrowException(v8::String::New("In logicaland bitset 2 is Null"));
+    }
+    
+    bs->logicaland(*bs2, *bs3);
+    
+    return scope.Close(Null());
+}
+
+//bool operator==(const EWAHBoolArray & x) const
+static JSVAL bs_eq(JSARGS args) {
+    HandleScope scope;
+    EWAHBoolArray<LENGTH>* bs = (EWAHBoolArray<LENGTH>*) External::Unwrap(args[0]);
+    if (!bs) {
+        return v8::ThrowException(v8::String::New("In eq bitset 1 is Null"));
+    }
+    EWAHBoolArray<LENGTH>* bs2 = (EWAHBoolArray<LENGTH>*) External::Unwrap(args[1]);
+    if (!bs2) {
+        return v8::ThrowException(v8::String::New("In eq bitset 2 is Null"));
+    }
+    
+    int ret = ((*bs) == (*bs2));
+    //cout << "eq: " << ret << endl;
+    
+    return scope.Close(Integer::New(ret));
+}
+
+//EWAHBoolArray<LENGTH>::const_iterator i = bitset1.begin(); i!=bitset1.end(); ++i
+static JSVAL bs_it_new(JSARGS args) {
+    HandleScope scope;
+    EWAHBoolArray<LENGTH>* bs = (EWAHBoolArray<LENGTH>*) External::Unwrap(args[0]);
+    if (!bs) {
+        return v8::ThrowException(v8::String::New("In it_new bitset is Null"));
+    }
+
+    EWAHBoolArray<LENGTH>::const_iterator* it = new EWAHBoolArray<LENGTH>::const_iterator(bs->begin());
+    cout << "it : " << **it << endl;
+    
+    //*it = bitset1.begin();
+    
+    //add iterator for auto del
+    add_obj((void*)it, auto_del_bs_it);
+    
+    return scope.Close(External::Wrap(it));
+}
+
+//EWAHBoolArray<LENGTH>::const_iterator i = bitset1.begin(); i!=bitset1.end(); ++i
+static JSVAL bs_it_end(JSARGS args) {
+    HandleScope scope;
+    EWAHBoolArray<LENGTH>* bs = (EWAHBoolArray<LENGTH>*) External::Unwrap(args[0]);
+    if (!bs) {
+        return v8::ThrowException(v8::String::New("In it_end bitset is Null"));
+    }
+
+    EWAHBoolArray<LENGTH>::const_iterator* it = new EWAHBoolArray<LENGTH>::const_iterator(bs->end());
+    //*it = bitset1.end();
+    
+    //add iterator for auto del
+    add_obj((void*)it, auto_del_bs_it);
+    
+    return scope.Close(External::Wrap(it));
+}
+
+//EWAHBoolArray<LENGTH>::const_iterator i = bitset1.begin(); i!=bitset1.end(); ++i
+static JSVAL bs_it_isend(JSARGS args) {
+    HandleScope scope;
+    EWAHBoolArray<LENGTH>* bs = (EWAHBoolArray<LENGTH>*) External::Unwrap(args[0]);
+    if (!bs) {
+        return v8::ThrowException(v8::String::New("In it_isend bitset is Null"));
+    }
+    EWAHBoolArray<LENGTH>::const_iterator* it = (EWAHBoolArray<LENGTH>::const_iterator*) External::Unwrap(args[1]);
+    if (!it) {
+        return v8::ThrowException(v8::String::New("In it_isend it is Null"));
+    }
+
+    int ret = ( (*it)==(bs->end()) );
+    return scope.Close(Integer::New(ret));
+}
+
+//EWAHBoolArray<LENGTH>::const_iterator i = bitset1.begin(); i!=bitset1.end(); ++i
+static JSVAL bs_it_next(JSARGS args) {
+    HandleScope scope;
+    EWAHBoolArray<LENGTH>::const_iterator* it = (EWAHBoolArray<LENGTH>::const_iterator*) External::Unwrap(args[0]);
+    if (!it) {
+        return v8::ThrowException(v8::String::New("In it_next it is Null"));
+    }
+
+    (*it)++;
+    
+    return scope.Close(External::Wrap(it));
+}
+
+static JSVAL bs_it_eq(JSARGS args) {
+    HandleScope scope;
+    EWAHBoolArray<LENGTH>::const_iterator* it = (EWAHBoolArray<LENGTH>::const_iterator*) External::Unwrap(args[0]);
+    if (!it) {
+        return v8::ThrowException(v8::String::New("In it_eq it is Null"));
+    }
+    
+    EWAHBoolArray<LENGTH>::const_iterator* it2 = (EWAHBoolArray<LENGTH>::const_iterator*) External::Unwrap(args[1]);
+    if (!it2) {
+        return v8::ThrowException(v8::String::New("In it_eq it 2 is Null"));
+    }
+
+    int ret = (*it)==(*it2);
+    return scope.Close(Integer::New(ret));
+}
+
+static JSVAL bs_it_val(JSARGS args) {
+    HandleScope scope;
+    EWAHBoolArray<LENGTH>::const_iterator* it = (EWAHBoolArray<LENGTH>::const_iterator*) External::Unwrap(args[0]);
+    if (!it) {
+        return v8::ThrowException(v8::String::New("In it_val it is Null"));
+    }
+    
+    int ret = *(*it);
+    return scope.Close(Integer::New(ret));
+}
+
+static JSVAL bs_tostring(JSARGS args) {
+    HandleScope scope;
+    EWAHBoolArray<LENGTH>* bs = (EWAHBoolArray<LENGTH>*) External::Unwrap(args[0]);
+    if (!bs) {
+        return v8::ThrowException(v8::String::New("In tostring bitset is Null"));
+    }
+            
+    std::stringstream ss;
+    //cout<<"first bitset : "<<endl;
+    for(EWAHBoolArray<LENGTH>::const_iterator i = bs->begin(); i!=bs->end(); ++i)
+        ss<<*i<<",";
+    
+    Handle<String> res = String::New(ss.str().c_str());
+    return scope.Close(res);
+}
+        
+//inline void write(ostream & out, const bool savesizeinbits=true) const;
+static JSVAL putbs(JSARGS args) {
+    HandleScope scope;
+    String::Utf8Value dbname(args[0]->ToString());
+    String::Utf8Value key(args[1]->ToString());
+
+    EWAHBoolArray<LENGTH>* bs = (EWAHBoolArray<LENGTH>*) External::Unwrap(args[2]);
+    if (!bs) {
+        return v8::ThrowException(v8::String::New("In putbs bitset is Null"));
+    }
+    leveldb::Status s;
+    leveldb::DB* db = getDb(gcontext->dbl, dbname, s);
+    if (!db) {
+        return v8::ThrowException(v8::String::New(s.ToString().c_str()));
+    }
+    
+    std::stringstream ss;
+    bs->write(ss, /*const bool savesizeinbits=*/ true);
+    //cout<< "putbs:" << ss.str().size() << " "<< ss.str() << endl;
+        
+    s = db->Put(leveldb::WriteOptions(), *key, ss.str());
+    if (!s.ok()) {
+        return v8::ThrowException(v8::String::New(s.ToString().c_str()));
+    }
+    return scope.Close(Integer::New(1));
+}
+
+//inline void read(istream & in, const bool savesizeinbits=true);
+static JSVAL getbs(JSARGS args) {
+    HandleScope scope;
+    String::Utf8Value dbname(args[0]->ToString());
+    String::Utf8Value key(args[1]->ToString());
+    EWAHBoolArray<LENGTH>* bs = (EWAHBoolArray<LENGTH>*) External::Unwrap(args[2]);
+    if (!bs) {
+        return v8::ThrowException(v8::String::New("In getbs bitset is Null"));
+    }
+    std::string val;
+    leveldb::Status s;
+    leveldb::DB* db = getDb(gcontext->dbl, dbname,s);
+    if (!db) {
+        return v8::ThrowException(v8::String::New(s.ToString().c_str()));
+    }
+    s = db->Get(leveldb::ReadOptions(), *key, &val);
+    if (!s.ok()) {
+        //if not found we return Null otherwise we throw exception
+        if (s.IsNotFound())
+            return scope.Close(Null());
+        else
+            return v8::ThrowException(v8::String::New(s.ToString().c_str()));
+    }
+    //cout<< "getbs:" << val.size() << " " << val << endl;
+    
+    std::stringstream ss(val);
+    
+    bs->read(ss, /*const bool savesizeinbits=*/true);
+    
+    return scope.Close(Integer::New(1));
+}
+
+
+
+//*******************************************************************            
+        
 //Taken from google shell example
 // Extracts a C string from a V8 Utf8Value.
 const char* ToCString(const v8::String::Utf8Value& value) {
@@ -392,7 +769,11 @@ void* worker_routine(void *vdbc) {
     
     Local<ObjectTemplate> globals = ObjectTemplate::New();
     
+#define SETGLOB(name) globals->Set(String::New(""#name), FunctionTemplate::New(name));
+
     globals->Set(String::New("addnum"), FunctionTemplate::New(addnum));
+    SETGLOB(print)
+    
     globals->Set(String::New("put"), FunctionTemplate::New(put));
     globals->Set(String::New("get"), FunctionTemplate::New(get));
     globals->Set(String::New("del"), FunctionTemplate::New(del));
@@ -409,9 +790,50 @@ void* worker_routine(void *vdbc) {
     globals->Set(String::New("it_key"), FunctionTemplate::New(it_key));
     globals->Set(String::New("it_val"), FunctionTemplate::New(it_val));
 
+    //BITSET
+    SETGLOB(bs_new)
+    SETGLOB(bs_reset)
+    SETGLOB(bs_set)
+    SETGLOB(bs_logicalor)
+    SETGLOB(bs_logicalnot)
+    SETGLOB(bs_inplace_logicalnot)
+    SETGLOB(bs_logicaland)
+    SETGLOB(bs_sparselogicaland)
+    SETGLOB(bs_tostring)
+    SETGLOB(bs_makeSameSize)
+    SETGLOB(bs_eq)
+    SETGLOB(putbs)
+    SETGLOB(getbs)
+    SETGLOB(bs_it_new)
+    SETGLOB(bs_it_end)
+    SETGLOB(bs_it_isend)
+    SETGLOB(bs_it_next)
+    SETGLOB(bs_it_val)
+    SETGLOB(bs_it_end)
+    SETGLOB(bs_it_eq)
+    
+    
     Handle<Context> context = Context::New(NULL, globals);
     context->Enter();
     
+    //Running init script with library functions
+ 
+    if (dbc->init_code != NULL) {
+        TryCatch try_catch;
+        
+        Local<String> source = String::New(dbc->init_code);
+        Local<Script> script = Script::Compile(source);
+        
+        if(script.IsEmpty())
+        {
+            ReportException(&try_catch);
+        } else {        
+            // Run the function once and catch the error to generate machine code
+            Local<Value> result = script->Run();
+        }
+        
+    }
+        
     while (1) {
         
         zmq_msg_t req;
@@ -421,10 +843,26 @@ void* worker_routine(void *vdbc) {
         assert (rc == 0);
         
         zmq_msg_t reply;
+        //rc = zmq_msg_init_size (&reply, 200);
+        //assert (rc == 0);
+
+//test mq speed only
+#if 0
+        
         rc = zmq_msg_init_size (&reply, 200);
         assert (rc == 0);
-
+        rc = zmq_msg_copy (&reply, &req);
+        assert (rc == 0);
+        rc = zmq_send (receiver, &reply, 0); 
+        assert (rc == 0);
         
+        //s_sleep(1);
+        
+        zmq_msg_close (&req);
+        zmq_msg_close (&reply);
+        continue;
+#endif
+
         //std::cout << "thread: " << pthread_self() << " Received script: " << (char*) zmq_msg_data(&req) << std::endl;
 
         //leveldb::Status s;
@@ -535,9 +973,21 @@ int main() {
     dbc.dbl = new db_lru_type(100);
     dbc.dbl->setOnRemove(&closeDb);
 
+    //char* init_code = readFile2("js/init.js");
+    system("cat js/*.js >>  all.js");
+    char* init_code = readFile2("all.js");
+    
+    dbc.init_code = init_code;
+    if (dbc.init_code) {
+        printf("init code: |%s|", dbc.init_code);
+    }
+    
     //  Socket to talk to clients
     void *clients = zmq_socket (dbc.context, ZMQ_ROUTER);
-    zmq_bind (clients, "tcp://*:5555");
+    rc = zmq_bind (clients, "tcp://*:5555");
+    //zmq_bind (clients, "epgm://eth0;*:5555");
+    //rc = zmq_bind(clients, "ipc:///tmp/feeds_mq");
+    assert(rc==0);
 
     //  Socket to talk to workers
     void *workers = zmq_socket (dbc.context, ZMQ_DEALER);
@@ -545,7 +995,7 @@ int main() {
    
     //  Launch pool of worker threads
     int thread_nbr;
-    for (thread_nbr = 0; thread_nbr < 2; thread_nbr++) {
+    for (thread_nbr = 0; thread_nbr < 6; thread_nbr++) {
         pthread_t worker;
         pthread_create (&worker, NULL, worker_routine, &dbc);
     }

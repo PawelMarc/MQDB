@@ -13,15 +13,14 @@
 #include <time.h>
 #include <sys/time.h>
 
-
-#define within(num) (int) ((float) num * random () / (RAND_MAX + 1.0))
-
-
 unsigned long get_time_us() {
     struct timeval t;
     gettimeofday (&t, NULL);
     return t.tv_sec * 1000000 + t.tv_usec;
 }
+
+#define within(num) (int) ((float) num * random () / (RAND_MAX + 1.0))
+
 
 int main ()
 {
@@ -29,10 +28,14 @@ int main ()
     zmq::context_t context (1);
     zmq::socket_t socket (context, ZMQ_REQ);
     
+    int rc = 0;
     std::cout << "Connecting to hello world server..." << std::endl;
     socket.connect ("tcp://localhost:5555");
+    //socket.connect ("epgm://eth0;127.0.0.1:5555");
+    //socket.connect("ipc:///tmp/feeds_mq");
     //socket.connect ("tcp://176.9.101.85:5555");
-
+    assert(rc == 0);
+    
     //  Initialize random number generator
     //srandom ((unsigned) time (NULL));
 
@@ -59,7 +62,8 @@ int main ()
 		//iss << "SET key" << request_nbr << " val" << request_nbr;
 		
 		snprintf ((char *) request.data(), 2000 ,
-            "for(i=%d; i<%d+10; i++){ put('db/testb','aaa'+i,'dane'+i) }", request_nbr, request_nbr);
+		    "put('db/testx','aaa','dane'); get('db/testx','aaa'); ");
+            //"for(i=%d; i<%d+10; i++){ put('db/testb','aaa'+i,'dane'+i) }", request_nbr, request_nbr);
 		
         //std::cout << "Sending: " << static_cast<char*>(request.data()) << "..." << std::endl;
         socket.send (request);
@@ -75,7 +79,8 @@ int main ()
     }
     resp_time_med = resp_time_med/count;
 
-    for (int request_nbr = start; request_nbr != start+count; request_nbr++) {
+#if 0
+    for (int request_nbr = start; request_nbr != start+1; request_nbr++) {
         //FIX: 100 is max length
         zmq::message_t request (2000);
         //memcpy ((void *) request.data (), "Hello", 5);
@@ -99,6 +104,7 @@ int main ()
         socket.recv (&reply);
         std::cout << "Received: " << static_cast<char*>(reply.data()) << std::endl;
     }
+#endif
 
     total_msec = (get_time_us() - total_msec)/1000;
 

@@ -4,7 +4,7 @@ ARCH := $(shell getconf LONG_BIT)
 
 COREMQ= mqdb.o
 OBJ=
-HMQ = include/lru_cache/lru_cache.h include/lru_cache/scoped_mutex.h
+HMQ = include/lru_cache/lru_cache.h include/lru_cache/scoped_mutex.h fstools.cc
 
 CORECL= client.o
 OBJ=
@@ -23,16 +23,33 @@ V8=	$(V8LIB_DIR)/libv8_base.a $(V8LIB_DIR)/libv8_snapshot.a
 
 CFLAGS = -O6 -fomit-frame-pointer -fdata-sections -ffunction-sections -fno-strict-aliasing -fno-rtti -fno-exceptions -fvisibility=hidden -Wall -W -Wno-unused-parameter -Wnon-virtual-dtor -m$(ARCH) -O3 -fomit-frame-pointer -fdata-sections -ffunction-sections -ansi -fno-strict-aliasing -fexceptions
 
-all: mqdb client
+all: mqdb client mqdb2 tasksink taskvent taskvs asclient
 
 %.o: %.cpp Makefile
 	g++ $(CFLAGS) -c -I./include -I$(V8DIR)/include -g -o $*.o $*.cpp
 
 mqdb:	$(V8) $(COREMQ) $(OBJ) $(HMQ) Makefile
-	g++ $(CFLAGS) -o mqdb $(COREMQ) $(OBJ) -L$(V8LIB_DIR)/ -L./leveldb/ -lv8_base -lv8_snapshot -lmm -lgd -lpthread -lzmq -lleveldb
+	g++ $(CFLAGS) -I./include -I$(V8DIR)/include -o mqdb mqdb.cpp -L$(V8LIB_DIR)/ -L./leveldb/ -lv8_base -lv8_snapshot -lmm -lpthread -lzmq -lleveldb
+
+#-lgd
+
+mqdb2:	mqdb2.cpp $(V8) $(HMQ) Makefile
+	g++ $(CFLAGS) -I./include -I$(V8DIR)/include -o mqdb2 mqdb2.cpp -L$(V8LIB_DIR)/ -L./leveldb/ -lv8_base -lv8_snapshot -lmm -lpthread -lzmq -lleveldb
 
 client:	$(V8) $(CORECL) $(OBJ) Makefile
-	g++ $(CFLAGS) -o client $(CORECL) $(OBJ) -L$(V8LIB_DIR)/ -lmm -lgd -lpthread -lzmq
+	g++ $(CFLAGS) -o client $(CORECL) $(OBJ) -L$(V8LIB_DIR)/ -lmm -lpthread -lzmq
+
+tasksink: tasksink.cpp Makefile
+	g++ $(CFLAGS) -o tasksink tasksink.cpp -lmm -lpthread -lzmq
+
+taskvent: taskvent.cpp Makefile
+	g++ $(CFLAGS) -o taskvent taskvent.cpp -lmm -lpthread -lzmq
+
+taskvs: taskvs.cpp Makefile
+	g++ $(CFLAGS) -o taskvs taskvs.cpp -lmm -lpthread -lzmq
+
+asclient: asclient.cpp Makefile
+	g++ $(CFLAGS) -o asclient asclient.cpp -lmm -lpthread -lzmq
 	
 $(V8):
 	cd $(V8DIR) && make dependencies && GYP_GENERATORS=make make $(V8VERSION)
