@@ -11,6 +11,7 @@ This is database server based on:
 * JavaScript V8 for scripting
 
 * LevelDB for storage
+* WAH bitmaps for indecies
 
 you simply send JS source code of commands to this server and it does all the magic
 
