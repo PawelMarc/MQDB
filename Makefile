@@ -33,23 +33,8 @@ mqdb:	$(V8) $(COREMQ) $(OBJ) $(HMQ) Makefile
 
 #-lgd
 
-mqdb2:	mqdb2.cpp $(V8) $(HMQ) Makefile
-	g++ $(CFLAGS) -I./include -I$(V8DIR)/include -o mqdb2 mqdb2.cpp -L$(V8LIB_DIR)/ -L./leveldb/ -lv8_base -lv8_snapshot -lmm -lpthread -lzmq -lleveldb
-
 client:	$(V8) $(CORECL) $(OBJ) Makefile
 	g++ $(CFLAGS) -o client $(CORECL) $(OBJ) -L$(V8LIB_DIR)/ -lmm -lpthread -lzmq
-
-tasksink: tasksink.cpp Makefile
-	g++ $(CFLAGS) -o tasksink tasksink.cpp -lmm -lpthread -lzmq
-
-taskvent: taskvent.cpp Makefile
-	g++ $(CFLAGS) -o taskvent taskvent.cpp -lmm -lpthread -lzmq
-
-taskvs: taskvs.cpp Makefile
-	g++ $(CFLAGS) -o taskvs taskvs.cpp -lmm -lpthread -lzmq
-
-asclient: asclient.cpp Makefile
-	g++ $(CFLAGS) -o asclient asclient.cpp -lmm -lpthread -lzmq
 	
 $(V8):
 	cd $(V8DIR) && make dependencies && GYP_GENERATORS=make make $(V8VERSION)
